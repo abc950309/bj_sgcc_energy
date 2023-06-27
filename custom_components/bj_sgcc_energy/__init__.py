@@ -23,11 +23,11 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = timedelta(minutes=10)
+UPDATE_INTERVAL = timedelta(hours=1)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType):
-    openid = config.get("openid")
+    openid = config[DOMAIN].get("openid")
     coordinator = GJDWCorrdinator(hass, openid)
     hass.data[DOMAIN] = coordinator
 
@@ -59,6 +59,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType):
 class GJDWCorrdinator(DataUpdateCoordinator):
     def __init__(self, hass, openid):
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)
+        _LOGGER.debug(f"init GJDWCorrdinator, openid= '{openid}'")
         self._hass = hass
         session = async_create_clientsession(hass)
         self._sgcc = SGCCData(session, openid)
@@ -67,16 +68,8 @@ class GJDWCorrdinator(DataUpdateCoordinator):
         await self._sgcc.async_get_token()
 
     async def _async_update_data(self):
-        try:
-            async with async_timeout.timeout(60):
-                data = await self._sgcc.async_get_data()
-                if not data:
-                    raise UpdateFailed("Failed to data update")
-                return data
-        except asyncio.TimeoutError as ex:
-            raise UpdateFailed("Data update timed out") from ex
-        except Exception as ex:
-            _LOGGER.error(
-                "Failed to data update with unknown reason: %(ex)s", {"ex": str(ex)}
-            )
-            raise UpdateFailed("Failed to data update with unknown reason") from ex
+        async with async_timeout.timeout(60):
+            data = await self._sgcc.async_get_data()
+            if not data:
+                raise UpdateFailed("Failed to data update")
+            return data

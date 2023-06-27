@@ -1,5 +1,6 @@
 {
   "domain": "bj_sgcc_energy",
+  "version": "0.0.1",
   "name": "\u5317\u4eac\u7528\u7535\u4fe1\u606f\u67e5\u8be2",
   "codeowners": [
     "@jianyun8023","@georgezhao2010"

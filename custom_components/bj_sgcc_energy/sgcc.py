@@ -44,6 +44,7 @@ def get_pgv_type(bill_range):
 
 class SGCCData:
     def __init__(self, session, openid):
+        _LOGGER.debug(f"init SGCCData, session= '{session}' openid= '{openid}'")
         self._session = session
         self._openid = openid
         self._info = {}
@@ -70,7 +71,7 @@ class SGCCData:
             response_headers = self.tuple2list(r.raw_headers)
             location = response_headers.get("Location") #这个OpenID有问题
             if location and str.find(location, "connect_redirect") > 0:
-                raise AuthFailed("Invalid open-id")
+                raise AuthFailed(f"Invalid open-id '{self._openid}'")
         else:
             _LOGGER.error(f"async_get_token response status_code = {r.status}")
             raise AuthFailed(f"Authentication unexpected response code {r.status}")
@@ -255,6 +256,6 @@ class SGCCData:
                 self.get_daily_bills(consNo)
             ]
             await asyncio.gather(*tasks)
-            _LOGGER.debug(f"Data {self._info}")
-        return self._info
 
+        _LOGGER.debug(f"Data {self._info}")
+        return self._info

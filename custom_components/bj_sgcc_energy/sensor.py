@@ -1,8 +1,10 @@
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.sensor import (
+    SensorEntity,
     SensorDeviceClass,
+    SensorStateClass,
 )
-from homeassistant.const import UnitOfEnergy, STATE_UNKNOWN
+from homeassistant.const import UnitOfEnergy, DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR, STATE_UNKNOWN
 from .const import DOMAIN
 
 SGCC_SENSORS = {
@@ -32,11 +34,13 @@ SGCC_SENSORS = {
         "name": "本年度用电量",
         "device_class": SensorDeviceClass.ENERGY,
         "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+        "state_class": SensorStateClass.TOTAL_INCREASING,
     },
     "year_consume_bill": {
         "name": "本年度电费",
         "icon": "hass:cash-100",
         "unit_of_measurement": "元",
+        "state_class": SensorStateClass.TOTAL_INCREASING,
     },
     "current_pgv_type": {"name": "当前电价类别", "icon": "hass:cash-100"},
 }
@@ -58,7 +62,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
     return None
 
 
-class SGCCBaseSensor(CoordinatorEntity):
+class SGCCBaseSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._unique_id = None
@@ -82,7 +86,7 @@ class SGCCSensor(SGCCBaseSensor):
         self._config = SGCC_SENSORS[self._sensor_key]
         self._attributes = self._config.get("attributes")
         self._coordinator = coordinator
-        self._unique_id = f"{DOMAIN}.{cons_no}_{sensor_key}"
+        self._unique_id = f"{DOMAIN}.electricity_{cons_no}_{sensor_key}"
         self.entity_id = self._unique_id
         return None
 
@@ -111,6 +115,10 @@ class SGCCSensor(SGCCBaseSensor):
         return self._config.get("device_class")
 
     @property
+    def state_class(self):
+        return self._config.get("state_class")
+
+    @property
     def unit_of_measurement(self):
         return self._config.get("unit_of_measurement")
 
@@ -132,13 +140,13 @@ class SGCCHistorySensor(SGCCBaseSensor):
         self._cons_no = cons_no
         self._coordinator = coordinator
         self._index = index
-        self._unique_id = f"{DOMAIN}.{cons_no}_history_{index + 1}"
+        self._unique_id = f"{DOMAIN}.electricity_{cons_no}_history_{index + 1}"
         self.entity_id = self._unique_id
 
     @property
     def name(self):
         try:
-            return (
+            return '电力消耗' + (
                 self._coordinator.data.get(self._cons_no)
                 .get("history")[self._index]
                 .get("name")
@@ -183,13 +191,13 @@ class SGCCDailyBillSensor(SGCCBaseSensor):
         self._cons_no = cons_no
         self._coordinator = coordinator
         self._index = index
-        self._unique_id = f"{DOMAIN}.{cons_no}_daily_{index + 1}"
+        self._unique_id = f"{DOMAIN}.electricity_{cons_no}_daily_{index + 1}"
         self.entity_id = self._unique_id
 
     @property
     def name(self):
         try:
-            return (
+            return '电力消耗' + (
                 self._coordinator.data.get(self._cons_no)
                 .get("daily_bills")[self._index]
                 .get("bill_date")
