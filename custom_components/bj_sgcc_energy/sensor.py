@@ -7,6 +7,7 @@ from homeassistant.components.sensor import (
 from homeassistant.const import UnitOfEnergy, DEVICE_CLASS_ENERGY, ENERGY_KILO_WATT_HOUR, STATE_UNKNOWN
 from .const import DOMAIN
 
+
 SGCC_SENSORS = {
     "balance": {
         "name": "电费余额",
@@ -54,10 +55,12 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
         for key in SGCC_SENSORS.keys():
             if key in values.keys():
                 sensors.append(SGCCSensor(coordinator, cons_no, key))
+
         for month in range(12):
             sensors.append(SGCCHistorySensor(coordinator, cons_no, month))
         for day in range(30):
             sensors.append(SGCCDailyBillSensor(coordinator, cons_no, day))
+
     async_add_devices(sensors, True)
     return None
 

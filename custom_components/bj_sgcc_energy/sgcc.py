@@ -2,6 +2,8 @@ import logging
 import datetime
 import json
 import asyncio
+import aiohttp
+from typing import List
 
 from .const import PGC_PRICE
 
@@ -43,7 +45,7 @@ def get_pgv_type(bill_range):
 
 
 class SGCCData:
-    def __init__(self, session, openid):
+    def __init__(self, session: aiohttp.ClientSession, openid: str):
         _LOGGER.debug(f"init SGCCData, session= '{session}' openid= '{openid}'")
         self._session = session
         self._openid = openid
@@ -219,36 +221,37 @@ class SGCCData:
         headers = self.commonHeaders()
         data = {
             "consNo": consNo,
-            "days": 30
+            "days": 45
         }
-        ret = True
+
         r = await self._session.post(DAILYBILL_URL, data=data, headers=headers, timeout=10)
-        if r.status == 200:
-            result = json.loads(await r.read())
-            if result["status"] == 0:
-                dayBills = len(result["data"])
-                self._info[consNo]["daily_bills"] = []
-                for count in range(dayBills):
-                    daily_bills = result["data"][dayBills - count - 1]
-                    self._info[consNo]["daily_bills"].append({
-                        "bill_date": daily_bills.get("DATA_DATE"),
-                        "bill_time": daily_bills.get("COL_TIME"),
-                        "day_consume": daily_bills.get("PAP_R"),
-                        "day_consume1": daily_bills.get("PAP_R1"),
-                        "day_consume2": daily_bills.get("PAP_R2"),
-                        "day_consume3": daily_bills.get("PAP_R3"),
-                        "day_consume4": daily_bills.get("PAP_R4"),
-                    })
-        else:
-            ret = False
-        return ret
+        r.raise_for_status()
+
+        result = await r.json()
+        if result["status"] != 0:
+            raise ValueError('get daily bills, status is not zero')
+
+        bills: List = result.get("data", [])
+        bills.reverse()
+
+        self._info[consNo]["daily_bills"] = []
+        for bill in bills:
+            self._info[consNo]["daily_bills"].append({
+                "bill_date": bill.get("DATA_DATE"),
+                "bill_time": bill.get("COL_TIME"),
+                "day_consume": bill.get("PAP_R"),
+                "day_consume1": bill.get("PAP_R1"),
+                "day_consume2": bill.get("PAP_R2"),
+                "day_consume3": bill.get("PAP_R3"),
+                "day_consume4": bill.get("PAP_R4"),
+            })
 
     async def async_get_data(self):
         self._info = {}
 
         await self.async_get_token()
         await self.async_get_ConsNo()
-        for consNo in self._info.keys():
+        for consNo in self._info:
             await self.async_get_detail(consNo)
             tasks = [
                 self.aysnc_get_balance(consNo),
@@ -257,5 +260,42 @@ class SGCCData:
             ]
             await asyncio.gather(*tasks)
 
-        _LOGGER.debug(f"Data {self._info}")
+        for consNo, data in self._info.items():
+            total_consume = float(0)
+
+            last_month_date = None
+            for monthly in data.get('history', []):
+                name = monthly.get('name', '')
+                if not name:
+                    continue
+
+                # '%d/%m/%Y' '15/02/2010'
+                date = datetime.datetime.strptime(name, '%Y%m') # 202209
+                if not last_month_date:
+                    last_month_date = date
+
+                if date < last_month_date.replace(month=1):
+                    break
+
+                total_consume = total_consume + float(monthly.get('consume', 0))
+
+            daily_start_date = (last_month_date + datetime.timedelta(days=32)).replace(day=1)
+            for daily in data.get('daily_bills', []):
+                date_str = daily.get('bill_date', '')
+                if not date_str:
+                    continue
+
+                # '%d/%m/%Y' '15/02/2010'
+                date = datetime.datetime.strptime(date_str, '%Y-%m-%d') # 2023-06-27
+                if not date:
+                    continue
+
+                if date < daily_start_date:
+                    break
+
+                total_consume = total_consume + float(daily.get('day_consume', 0))
+            
+            data['year_consume'] = total_consume
+
+        _LOGGER.debug(f"bj_sgcc_energy get data: {json.dumps(self._info)}")
         return self._info
